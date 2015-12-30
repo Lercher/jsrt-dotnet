@@ -24,7 +24,9 @@ namespace Microsoft.Scripting.JavaScript
 
             var eng = GetEngineAndClaimContext();
             JavaScriptValueSafeHandle resultHandle;
-            Errors.ThrowIfIs(api_.JsCallFunction(handle_, argsArray, (ushort)argsArray.Length, out resultHandle));
+            Errors.CheckForScriptExceptionOrThrow(api_.JsCallFunction(handle_, argsArray, (ushort)argsArray.Length, out resultHandle), eng);
+            if (resultHandle.IsInvalid)
+                return eng.UndefinedValue;
 
             return eng.CreateValueFromHandle(resultHandle);
         }
@@ -37,7 +39,9 @@ namespace Microsoft.Scripting.JavaScript
 
             var eng = GetEngineAndClaimContext();
             JavaScriptValueSafeHandle resultHandle;
-            Errors.ThrowIfIs(api_.JsConstructObject(handle_, argsArray, (ushort)argsArray.Length, out resultHandle));
+            Errors.CheckForScriptExceptionOrThrow(api_.JsConstructObject(handle_, argsArray, (ushort)argsArray.Length, out resultHandle), eng);
+            if (resultHandle.IsInvalid)
+                return eng.NullValue;
 
             return eng.CreateObjectFromHandle(resultHandle);
         }

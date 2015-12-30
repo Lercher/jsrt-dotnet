@@ -271,6 +271,7 @@ namespace Microsoft.Scripting.JavaScript
                     Debug.Assert(arr != null);
 
                     return arr.Select(v => ToObject(v)).ToArray();
+
                 case JavaScriptValueType.ArrayBuffer:
                     var ab = val as JavaScriptArrayBuffer;
                     Debug.Assert(ab != null);
@@ -312,10 +313,26 @@ namespace Microsoft.Scripting.JavaScript
             var eng = GetEngineAndClaimContext();
 
             var publicConstructors = t.GetConstructors(BindingFlags.Public);
-            var publicInstanceMethods = t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy | BindingFlags.DeclaredOnly);
-            var publicStaticMethods = t.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy | BindingFlags.DeclaredOnly);
             var publicInstanceProperties = t.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy | BindingFlags.DeclaredOnly);
             var publicStaticProperties = t.GetProperties(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy | BindingFlags.DeclaredOnly);
+            HashSet<string> instMethodNames = new HashSet<string>();
+            foreach (var p in publicInstanceProperties)
+            {
+                if (p.GetMethod != null) instMethodNames.Add(p.GetMethod.Name);
+                if (p.SetMethod != null) instMethodNames.Add(p.SetMethod.Name);
+            }
+            HashSet<string> stMethodNames = new HashSet<string>();
+            foreach (var p in publicStaticProperties)
+            {
+                if (p.GetMethod != null) stMethodNames.Add(p.GetMethod.Name);
+                if (p.SetMethod != null) stMethodNames.Add(p.SetMethod.Name);
+            }
+
+            var publicInstanceMethods = t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy | BindingFlags.DeclaredOnly)
+                .Where(m => !instMethodNames.Contains(m.Name)).ToArray();
+            var publicStaticMethods = t.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy | BindingFlags.DeclaredOnly)
+                .Where(m => !stMethodNames.Contains(m.Name)).ToArray();
+
             if (AnyHaveSameArity(publicConstructors, publicInstanceMethods, publicStaticMethods, publicInstanceProperties, publicStaticProperties))
                 throw new InvalidOperationException("The specified type cannot be marshaled; some publicly accessible members have the same arity.  Projected methods can't differentiate only by type (e.g., Add(int, int) and Add(float, float) would cause this error).");
 
@@ -384,6 +401,7 @@ namespace Microsoft.Scripting.JavaScript
                         return eng.UndefinedValue;
                     }
                 }, owningTypeName + "." + group.Key);
+                target.SetPropertyByName(group.Key, method);
             }
         }
 

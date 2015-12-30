@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Scripting.JavaScript;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -21,6 +22,20 @@ namespace Microsoft.Scripting
 
         public static void ThrowIfIs(JsErrorCode errorCode)
         {
+            Debug.Assert(errorCode != JsErrorCode.JsErrorScriptException);
+
+            if (errorCode != JsErrorCode.JsNoError)
+                throw new Exception(errorCode.ToString());
+        }
+
+        public static void CheckForScriptExceptionOrThrow(JsErrorCode errorCode, JavaScriptEngine engine)
+        {
+            if (errorCode == JsErrorCode.JsErrorScriptException)
+            {
+                engine.OnRuntimeExceptionRaised();
+                return;
+            }
+
             if (errorCode != JsErrorCode.JsNoError)
                 throw new Exception(errorCode.ToString());
         }

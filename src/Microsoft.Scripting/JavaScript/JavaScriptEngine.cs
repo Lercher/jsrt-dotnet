@@ -41,6 +41,9 @@ namespace Microsoft.Scripting.JavaScript
 
         private List<IntPtr> handlesToRelease_;
         private object handleReleaseLock_;
+
+        private JavaScriptValue undefined_, true_, false_;
+        private JavaScriptObject global_, null_;
         
         static JavaScriptEngine()
         {
@@ -66,6 +69,23 @@ namespace Microsoft.Scripting.JavaScript
 
             handlesToRelease_ = new List<IntPtr>();
             handleReleaseLock_ = new object();
+
+            ClaimContext();
+            JavaScriptValueSafeHandle global;
+            Errors.ThrowIfIs(api_.JsGetGlobalObject(out global));
+            global_ = CreateObjectFromHandle(global);
+            JavaScriptValueSafeHandle undef;
+            Errors.ThrowIfIs(api_.JsGetUndefinedValue(out undef));
+            undefined_ = CreateValueFromHandle(undef);
+            JavaScriptValueSafeHandle @null;
+            Errors.ThrowIfIs(api_.JsGetNullValue(out @null));
+            null_ = CreateObjectFromHandle(@null);
+            JavaScriptValueSafeHandle @true;
+            Errors.ThrowIfIs(api_.JsGetTrueValue(out @true));
+            true_ = CreateValueFromHandle(@true);
+            JavaScriptValueSafeHandle @false;
+            Errors.ThrowIfIs(api_.JsGetFalseValue(out @false));
+            false_ = CreateValueFromHandle(@false);
         }
 
         public JavaScriptRuntime Runtime
@@ -130,6 +150,8 @@ namespace Microsoft.Scripting.JavaScript
 
         internal JavaScriptValue CreateValueFromHandle(JavaScriptValueSafeHandle handle)
         {
+            Debug.Assert(!(handle.IsClosed || handle.IsInvalid));
+
             ClaimContext();
 
             JsValueType kind;
@@ -243,12 +265,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             get
             {
-                ClaimContext();
-
-                JavaScriptValueSafeHandle global;
-                Errors.ThrowIfIs(api_.JsGetGlobalObject(out global));
-
-                return CreateObjectFromHandle(global);
+                return global_;
             }
         }
 
@@ -256,12 +273,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             get
             {
-                ClaimContext();
-
-                JavaScriptValueSafeHandle global;
-                Errors.ThrowIfIs(api_.JsGetUndefinedValue(out global));
-
-                return CreateValueFromHandle(global);
+                return undefined_;
             }
         }
 
@@ -269,12 +281,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             get
             {
-                ClaimContext();
-
-                JavaScriptValueSafeHandle global;
-                Errors.ThrowIfIs(api_.JsGetNullValue(out global));
-
-                return CreateObjectFromHandle(global);
+                return null_;
             }
         }
 
@@ -282,12 +289,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             get
             {
-                ClaimContext();
-
-                JavaScriptValueSafeHandle global;
-                Errors.ThrowIfIs(api_.JsGetTrueValue(out global));
-
-                return CreateValueFromHandle(global);
+                return true_;
             }
         }
 
@@ -295,12 +297,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             get
             {
-                ClaimContext();
-
-                JavaScriptValueSafeHandle global;
-                Errors.ThrowIfIs(api_.JsGetFalseValue(out global));
-
-                return CreateValueFromHandle(global);
+                return false_;
             }
         }
 
@@ -315,6 +312,14 @@ namespace Microsoft.Scripting.JavaScript
 
                 return has;
             }
+        }
+
+        public event EventHandler RuntimeExceptionRaised;
+        internal void OnRuntimeExceptionRaised()
+        {
+            var rer = RuntimeExceptionRaised;
+            if (rer != null)
+                rer(this, EventArgs.Empty);
         }
         #endregion
 
@@ -373,7 +378,9 @@ namespace Microsoft.Scripting.JavaScript
 
             ClaimContext();
             JavaScriptValueSafeHandle handle;
-            Errors.ThrowIfIs(api_.JsRunScript(source.SourceText, source.SourceContextId, source.SourceLocation, out handle));
+            Errors.CheckForScriptExceptionOrThrow(api_.JsRunScript(source.SourceText, source.SourceContextId, source.SourceLocation, out handle), this);
+            if (handle.IsInvalid)
+                return undefined_;
 
             return CreateValueFromHandle(handle);
         }

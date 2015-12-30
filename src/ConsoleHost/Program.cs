@@ -17,11 +17,18 @@ namespace ConsoleHost
                 engine.SetGlobalFunction("echo", Echo);
                 var pt = new Point { X = 18, Y = 27 };
                 engine.SetGlobalVariable("pt", engine.Converter.FromObject(pt));
+                engine.RuntimeExceptionRaised += (sender, e) =>
+                {
+                    var error = engine.GetAndClearException();
+                    dynamic glob = engine.GlobalObject;
+                    Console.WriteLine(glob.JSON.stringify(error));
+
+                };
 
                 var fn = engine.EvaluateScriptText(@"(function() {
     echo('{0}, {1}!', 'Hello', 'world');
-    //echo(pt.X);
-    //echo(pt.Y);
+    echo(pt.X);
+    echo(pt.Y);
     echo(pt.ToString());
 })();");
                 fn.Invoke(Enumerable.Empty<JavaScriptValue>());
