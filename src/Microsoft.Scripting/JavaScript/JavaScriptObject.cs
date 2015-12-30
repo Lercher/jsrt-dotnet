@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Dynamic;
+using System.Runtime.InteropServices;
 
 namespace Microsoft.Scripting.JavaScript
 {
@@ -57,6 +58,15 @@ namespace Microsoft.Scripting.JavaScript
                     value = eng.NullValue;
 
                 Errors.ThrowIfIs(api_.JsSetPrototype(handle_, value.handle_));
+            }
+        }
+
+        public object ExternalObject
+        {
+            get
+            {
+                var eng = GetEngine();
+                return eng.GetExternalObjectFrom(this);
             }
         }
 

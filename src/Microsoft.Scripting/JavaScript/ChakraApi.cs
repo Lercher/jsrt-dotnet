@@ -1,5 +1,6 @@
 ﻿namespace Microsoft.Scripting
 {
+    using JavaScript.SafeHandles;
     using System;
     using System.IO;
     using System.Runtime.InteropServices;
@@ -228,6 +229,9 @@
 
         [System.Runtime.InteropServices.UnmanagedFunctionPointerAttribute(System.Runtime.InteropServices.CallingConvention.Winapi)]
         public delegate Microsoft.Scripting.JsErrorCode FnJsStrictEquals(Microsoft.Scripting.JavaScript.SafeHandles.JavaScriptValueSafeHandle obj1, Microsoft.Scripting.JavaScript.SafeHandles.JavaScriptValueSafeHandle obj2, [System.Runtime.InteropServices.MarshalAsAttribute(System.Runtime.InteropServices.UnmanagedType.U1)] out bool result);
+
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        public delegate JsErrorCode FnJsGetExternalData(JavaScriptValueSafeHandle @ref, out IntPtr externalData);
         #endregion
 
         #region Field definitions
@@ -376,6 +380,8 @@
         public readonly FnJsEquals JsEquals;
 
         public readonly FnJsStrictEquals JsStrictEquals;
+
+        public readonly FnJsGetExternalData JsGetExternalData;
         #endregion
 
         private static System.Lazy<ChakraApi> sharedInstance_ = new System.Lazy<ChakraApi>(Load);
@@ -468,6 +474,7 @@
             SetFn(ref JsConvertValueToString, hModule, "JsConvertValueToString");
             SetFn(ref JsEquals, hModule, "JsEquals");
             SetFn(ref JsStrictEquals, hModule, "JsStrictEquals");
+            SetFn(ref JsGetExternalData, hModule, "JsGetExternalData");
         }
 
         public static ChakraApi Instance

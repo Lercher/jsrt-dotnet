@@ -45,5 +45,15 @@ namespace Microsoft.Scripting.JavaScript
 
             return new UnmanagedMemoryStream((byte*)buffer.ToPointer(), len);
         }
+
+        internal unsafe Tuple<IntPtr, uint> GetUnderlyingMemoryInfo()
+        {
+            var eng = GetEngineAndClaimContext();
+            IntPtr buffer;
+            uint len;
+            Errors.ThrowIfIs(api_.JsGetArrayBufferStorage(handle_, out buffer, out len));
+
+            return Tuple.Create(buffer, len);
+        }
     }
 }

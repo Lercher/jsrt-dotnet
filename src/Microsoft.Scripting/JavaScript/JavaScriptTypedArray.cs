@@ -1,6 +1,8 @@
 ﻿using Microsoft.Scripting.JavaScript.SafeHandles;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -42,6 +44,17 @@ namespace Microsoft.Scripting.JavaScript
                 var val = GetPropertyByName("byteOffset");
                 return (uint)eng.Converter.ToDouble(val);
             }
+        }
+
+        public unsafe Stream GetUnderlyingMemory()
+        {
+            var buf = Buffer;
+            Debug.Assert(buf != null);
+
+            var mem = buf.GetUnderlyingMemoryInfo();
+            byte* pMem = (byte*)mem.Item1.ToPointer();
+
+            return new UnmanagedMemoryStream(pMem + ByteOffset, ByteLength);
         }
 
         public uint Length

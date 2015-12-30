@@ -435,6 +435,23 @@ namespace Microsoft.Scripting.JavaScript
             return CreateObjectFromHandle(result);
         }
 
+        internal object GetExternalObjectFrom(JavaScriptValue value)
+        {
+            Debug.Assert(value != null);
+
+            ClaimContext();
+            IntPtr handlePtr;
+            Errors.ThrowIfIs(api_.JsGetExternalData(value.handle_, out handlePtr));
+            GCHandle gcHandle = GCHandle.FromIntPtr(handlePtr);
+            ExternalObjectThunkData thunk = gcHandle.Target as ExternalObjectThunkData;
+            if (thunk == null)
+                return null;
+
+            object result;
+            thunk.userData.TryGetTarget(out result);
+            return result;
+        }
+
         public JavaScriptSymbol CreateSymbol(string description)
         {
             JavaScriptValueSafeHandle handle;

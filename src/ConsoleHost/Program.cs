@@ -15,8 +15,14 @@ namespace ConsoleHost
             using (var engine = runtime.CreateEngine())
             {
                 engine.SetGlobalFunction("echo", Echo);
+                var pt = new Point { X = 18, Y = 27 };
+                engine.SetGlobalVariable("pt", engine.Converter.FromObject(pt));
+
                 var fn = engine.EvaluateScriptText(@"(function() {
     echo('{0}, {1}!', 'Hello', 'world');
+    //echo(pt.X);
+    //echo(pt.Y);
+    echo(pt.ToString());
 })();");
                 fn.Invoke(Enumerable.Empty<JavaScriptValue>());
 
@@ -40,6 +46,26 @@ namespace ConsoleHost
         {
             Console.WriteLine(arguments.First().ToString(), (object[])arguments.Skip(1).ToArray());
             return engine.UndefinedValue;
+        }
+    }
+
+    public class Point
+    {
+        public int X
+        {
+            get;
+            set;
+        }
+        
+        public int Y
+        {
+            get;
+            set;
+        }
+
+        public override string ToString()
+        {
+            return $"({X}, {Y})";
         }
     }
 }

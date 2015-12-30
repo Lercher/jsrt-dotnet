@@ -130,7 +130,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             if (disposing)
             {
-                if (handle_ != null)
+                if (handle_ != null && !handle_.IsClosed)
                 {
                     handle_.Dispose();
                     handle_ = null;
