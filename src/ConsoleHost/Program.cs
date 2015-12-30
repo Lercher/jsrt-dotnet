@@ -22,7 +22,6 @@ namespace ConsoleHost
                     var error = engine.GetAndClearException();
                     dynamic glob = engine.GlobalObject;
                     Console.WriteLine(glob.JSON.stringify(error));
-
                 };
 
                 var fn = engine.EvaluateScriptText(@"(function() {

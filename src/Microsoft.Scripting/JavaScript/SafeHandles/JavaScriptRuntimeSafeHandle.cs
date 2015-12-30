@@ -35,10 +35,12 @@ namespace Microsoft.Scripting.JavaScript.SafeHandles
             if (IsInvalid)
                 return false;
 
+            var toRelease = this.handle;
+
             var error = ChakraApi.Instance.JsSetCurrentContext(new JavaScriptEngineSafeHandle(IntPtr.Zero));
             Debug.Assert(error == JsErrorCode.JsNoError);
 
-            error = ChakraApi.Instance.JsDisposeRuntime(handle);
+            error = ChakraApi.Instance.JsDisposeRuntime(toRelease);
             Debug.Assert(error == JsErrorCode.JsNoError);
             return true;
         }

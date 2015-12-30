@@ -409,6 +409,9 @@ namespace Microsoft.Scripting.JavaScript
 
         private static void FinalizerCallbackThunk(IntPtr externalData)
         {
+            if (externalData == IntPtr.Zero)
+                return;
+
             GCHandle handle = GCHandle.FromIntPtr(externalData);
             var thunkData = handle.Target as ExternalObjectThunkData;
             if (thunkData == null)
@@ -437,7 +440,7 @@ namespace Microsoft.Scripting.JavaScript
 
             ClaimContext();
             JavaScriptValueSafeHandle result;
-            Errors.ThrowIfIs(api_.JsCreateExternalObject(GCHandle.ToIntPtr(handle), NativeCallbackPtr, out result));
+            Errors.ThrowIfIs(api_.JsCreateExternalObject(GCHandle.ToIntPtr(handle), FinalizerCallbackPtr, out result));
 
             return CreateObjectFromHandle(result);
         }
@@ -541,29 +544,36 @@ namespace Microsoft.Scripting.JavaScript
             if (data == IntPtr.Zero)
                 return IntPtr.Zero;
 
-            GCHandle handle = GCHandle.FromIntPtr(data);
-            var nativeThunk = handle.Target as NativeFunctionThunkData;
-            JavaScriptEngine engine;
-            if (!nativeThunk.engine.TryGetTarget(out engine))
-                return IntPtr.Zero;
-
-            JavaScriptValue thisValue = null;
-            if (argCount > 0)
-            {
-                thisValue = engine.CreateValueFromHandle(new JavaScriptValueSafeHandle(args[0]));
-            }
-
             try
             {
-                var result = nativeThunk.callback(engine, asConstructor, thisValue, args.Skip(1).Select(h => engine.CreateValueFromHandle(new JavaScriptValueSafeHandle(h))));
-                return result.handle_.DangerousGetHandle();
-            }
-            catch (Exception ex)
-            {
-                var error = engine.CreateError(ex.Message);
-                engine.SetException(error);
+                GCHandle handle = GCHandle.FromIntPtr(data);
+                var nativeThunk = handle.Target as NativeFunctionThunkData;
+                JavaScriptEngine engine;
+                if (!nativeThunk.engine.TryGetTarget(out engine))
+                    return IntPtr.Zero;
 
-                return engine.UndefinedValue.handle_.DangerousGetHandle();
+                JavaScriptValue thisValue = null;
+                if (argCount > 0)
+                {
+                    thisValue = engine.CreateValueFromHandle(new JavaScriptValueSafeHandle(args[0]));
+                }
+
+                try
+                {
+                    var result = nativeThunk.callback(engine, asConstructor, thisValue, args.Skip(1).Select(h => engine.CreateValueFromHandle(new JavaScriptValueSafeHandle(h))));
+                    return result.handle_.DangerousGetHandle();
+                }
+                catch (Exception ex)
+                {
+                    var error = engine.CreateError(ex.Message);
+                    engine.SetException(error);
+
+                    return engine.UndefinedValue.handle_.DangerousGetHandle();
+                }
+            }
+            catch
+            {
+                return IntPtr.Zero;
             }
         }
 

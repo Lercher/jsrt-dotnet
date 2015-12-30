@@ -167,6 +167,8 @@
 
         [System.Runtime.InteropServices.UnmanagedFunctionPointerAttribute(System.Runtime.InteropServices.CallingConvention.Winapi)]
         public delegate Microsoft.Scripting.JsErrorCode FnJsSetRuntimeMemoryAllocationCallback(Microsoft.Scripting.JavaScript.SafeHandles.JavaScriptRuntimeSafeHandle runtime, System.IntPtr extraInformation, System.IntPtr pfnCallback);
+        [System.Runtime.InteropServices.UnmanagedFunctionPointerAttribute(System.Runtime.InteropServices.CallingConvention.Winapi)]
+        public delegate Microsoft.Scripting.JsErrorCode FnJsSetRuntimeMemoryAllocationCallbackWithIntPtr(IntPtr runtime, System.IntPtr extraInformation, System.IntPtr pfnCallback);
 
         [System.Runtime.InteropServices.UnmanagedFunctionPointerAttribute(System.Runtime.InteropServices.CallingConvention.Winapi)]
         public delegate Microsoft.Scripting.JsErrorCode FnJsCollectGarbage(Microsoft.Scripting.JavaScript.SafeHandles.JavaScriptRuntimeSafeHandle runtime);
@@ -232,6 +234,9 @@
 
         [UnmanagedFunctionPointer(CallingConvention.Winapi)]
         public delegate JsErrorCode FnJsGetExternalData(JavaScriptValueSafeHandle @ref, out IntPtr externalData);
+
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        public delegate JsErrorCode FnJsSetExternalData(JavaScriptValueSafeHandle @ref, IntPtr externalData);
         #endregion
 
         #region Field definitions
@@ -340,6 +345,7 @@
         public readonly FnJsCreateRuntime JsCreateRuntime;
 
         public readonly FnJsSetRuntimeMemoryAllocationCallback JsSetRuntimeMemoryAllocationCallback;
+        public readonly FnJsSetRuntimeMemoryAllocationCallbackWithIntPtr JsSetRuntimeMemoryAllocationCallbackWithIntPtr;
 
         public readonly FnJsCollectGarbage JsCollectGarbage;
 
@@ -382,6 +388,8 @@
         public readonly FnJsStrictEquals JsStrictEquals;
 
         public readonly FnJsGetExternalData JsGetExternalData;
+
+        public readonly FnJsSetExternalData JsSetExternalData;
         #endregion
 
         private static System.Lazy<ChakraApi> sharedInstance_ = new System.Lazy<ChakraApi>(Load);
@@ -454,6 +462,7 @@
             SetFn(ref JsDisposeRuntime, hModule, "JsDisposeRuntime");
             SetFn(ref JsCreateRuntime, hModule, "JsCreateRuntime");
             SetFn(ref JsSetRuntimeMemoryAllocationCallback, hModule, "JsSetRuntimeMemoryAllocationCallback");
+            SetFn(ref JsSetRuntimeMemoryAllocationCallbackWithIntPtr, hModule, "JsSetRuntimeMemoryAllocationCallback");
             SetFn(ref JsCollectGarbage, hModule, "JsCollectGarbage");
             SetFn(ref JsDisableRuntimeExecution, hModule, "JsDisableRuntimeExecution");
             SetFn(ref JsEnableRuntimeExecution, hModule, "JsEnableRuntimeExecution");
@@ -475,6 +484,7 @@
             SetFn(ref JsEquals, hModule, "JsEquals");
             SetFn(ref JsStrictEquals, hModule, "JsStrictEquals");
             SetFn(ref JsGetExternalData, hModule, "JsGetExternalData");
+            SetFn(ref JsSetExternalData, hModule, "JsSetExternalData");
         }
 
         public static ChakraApi Instance
