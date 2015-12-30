@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Dynamic;
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 
 namespace Microsoft.Scripting.JavaScript
 {
@@ -27,6 +28,7 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
+        [DebuggerHidden]
         public bool IsExtensible
         {
             get
@@ -40,6 +42,7 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
+        [DebuggerHidden]
         public JavaScriptObject Prototype
         {
             get
@@ -70,6 +73,7 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
+        [DebuggerHidden]
         public bool IsSealed
         {
             get
@@ -81,6 +85,7 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
+        [DebuggerHidden]
         public bool IsFrozen
         {
             get

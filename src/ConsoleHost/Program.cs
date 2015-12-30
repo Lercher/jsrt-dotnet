@@ -15,20 +15,33 @@ namespace ConsoleHost
             using (var engine = runtime.CreateEngine())
             {
                 engine.SetGlobalFunction("echo", Echo);
-                var pt = new Point { X = 18, Y = 27 };
-                engine.SetGlobalVariable("pt", engine.Converter.FromObject(pt));
+                engine.AddTypeToGlobal<Point3D>();
+                var pt = new Point3D { X = 18, Y = 27, Z = -1 };
+                //engine.SetGlobalVariable("pt", engine.Converter.FromObject(pt));
                 engine.RuntimeExceptionRaised += (sender, e) =>
                 {
                     var error = engine.GetAndClearException();
                     dynamic glob = engine.GlobalObject;
-                    Console.WriteLine(glob.JSON.stringify(error));
+                    var color = Console.ForegroundColor;
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("Script error occurred: {0}", glob.JSON.stringify(error));
+                    Console.ForegroundColor = color;
                 };
 
                 var fn = engine.EvaluateScriptText(@"(function() {
+    var o = new Point3D(1, 2, 3);
+    echo(o.toString());
+    o.X = 254;
+    echo('{0}', o.X);
+    o.Y = 189;
+    o.Z = -254.341;
+    echo(o.ToString());
     echo('{0}, {1}!', 'Hello', 'world');
-    echo(pt.X);
-    echo(pt.Y);
-    echo(pt.ToString());
+    //echo('{0}', pt.X);
+    //echo('{0}', pt.Y);
+    //echo('{0}', pt.ToString());
+    //pt.Y = 207;
+    //echo('{0}', pt.ToString());
 })();");
                 fn.Invoke(Enumerable.Empty<JavaScriptValue>());
 
@@ -50,20 +63,22 @@ namespace ConsoleHost
 
         static JavaScriptValue Echo(JavaScriptEngine engine, bool construct, JavaScriptValue thisValue, IEnumerable<JavaScriptValue> arguments)
         {
-            Console.WriteLine(arguments.First().ToString(), (object[])arguments.Skip(1).ToArray());
+            string fmt = arguments.First().ToString();
+            object[] args = (object[])arguments.Skip(1).ToArray();
+            Console.WriteLine(fmt, args);
             return engine.UndefinedValue;
         }
     }
 
     public class Point
     {
-        public int X
+        public double X
         {
             get;
             set;
         }
         
-        public int Y
+        public double Y
         {
             get;
             set;
@@ -72,6 +87,20 @@ namespace ConsoleHost
         public override string ToString()
         {
             return $"({X}, {Y})";
+        }
+    }
+
+    public class Point3D : Point
+    {
+        public double Z
+        {
+            get;
+            set;
+        }
+
+        public override string ToString()
+        {
+            return $"({X}, {Y}, {Z})";
         }
     }
 }

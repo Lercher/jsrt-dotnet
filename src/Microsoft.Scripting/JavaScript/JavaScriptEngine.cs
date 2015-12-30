@@ -698,6 +698,18 @@ namespace Microsoft.Scripting.JavaScript
             Errors.ThrowIfIs(api_.JsStartDebugging());
         }
 
+        public void AddTypeToGlobal<T>(string name = null)
+        {
+            Type t = typeof(T);
+            if (null == name)
+            {
+                name = t.Name;
+            }
+
+            var proj = Converter.GetProjectionForType(t);
+            SetGlobalVariable(name, proj);
+        }
+
         #region IDisposable implementation
         public void Dispose()
         {

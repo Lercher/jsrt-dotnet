@@ -186,7 +186,7 @@ namespace Microsoft.Scripting.JavaScript
                 {
                     void* str;
                     uint len;
-                    Errors.ThrowIfIs(api_.JsStringToPointer(value.handle_, out str, out len));
+                    Errors.ThrowIfIs(api_.JsStringToPointer(tempStr, out str, out len));
                     if (len > int.MaxValue)
                         throw new OutOfMemoryException("Exceeded maximum string length.");
 
@@ -304,6 +304,24 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
+        internal JavaScriptObject GetProjectionForType(Type t)
+        {
+            JavaScriptProjection baseTypeProjection;
+
+            if (projectionTypes_.TryGetValue(t, out baseTypeProjection))
+            {
+                Interlocked.Increment(ref baseTypeProjection.RefCount);
+                projectionTypes_[t] = baseTypeProjection;
+            }
+            else
+            {
+                baseTypeProjection = InitializeProjectionForType(t);
+                baseTypeProjection.RefCount++;
+            }
+
+            return baseTypeProjection.Prototype;
+        }
+
         private JavaScriptProjection InitializeProjectionForType(Type t)
         {
             if (t.GenericTypeArguments.Length > 0 && !t.IsConstructedGenericType)
@@ -312,26 +330,13 @@ namespace Microsoft.Scripting.JavaScript
             JavaScriptObject result;
             var eng = GetEngineAndClaimContext();
 
-            var publicConstructors = t.GetConstructors(BindingFlags.Public);
-            var publicInstanceProperties = t.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy | BindingFlags.DeclaredOnly);
-            var publicStaticProperties = t.GetProperties(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy | BindingFlags.DeclaredOnly);
-            HashSet<string> instMethodNames = new HashSet<string>();
-            foreach (var p in publicInstanceProperties)
-            {
-                if (p.GetMethod != null) instMethodNames.Add(p.GetMethod.Name);
-                if (p.SetMethod != null) instMethodNames.Add(p.SetMethod.Name);
-            }
-            HashSet<string> stMethodNames = new HashSet<string>();
-            foreach (var p in publicStaticProperties)
-            {
-                if (p.GetMethod != null) stMethodNames.Add(p.GetMethod.Name);
-                if (p.SetMethod != null) stMethodNames.Add(p.SetMethod.Name);
-            }
+            ObjectReflector reflector = ObjectReflector.Create(t);
 
-            var publicInstanceMethods = t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy | BindingFlags.DeclaredOnly)
-                .Where(m => !instMethodNames.Contains(m.Name)).ToArray();
-            var publicStaticMethods = t.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy | BindingFlags.DeclaredOnly)
-                .Where(m => !stMethodNames.Contains(m.Name)).ToArray();
+            var publicConstructors = reflector.GetConstructors();
+            var publicInstanceProperties = reflector.GetProperties(instance: true);
+            var publicStaticProperties = reflector.GetProperties(instance: false);
+            var publicInstanceMethods = reflector.GetMethods(instance: true);
+            var publicStaticMethods = reflector.GetMethods(instance: false);
 
             if (AnyHaveSameArity(publicConstructors, publicInstanceMethods, publicStaticMethods, publicInstanceProperties, publicStaticProperties))
                 throw new InvalidOperationException("The specified type cannot be marshaled; some publicly accessible members have the same arity.  Projected methods can't differentiate only by type (e.g., Add(int, int) and Add(float, float) would cause this error).");
@@ -339,27 +344,40 @@ namespace Microsoft.Scripting.JavaScript
             // todo:
             // fields
             // events
-            if (publicConstructors.Length > 0)
+            JavaScriptFunction ctor;
+            if (publicConstructors.Any())
             {
-                // marshal as function
-                var fn = eng.CreateFunction((engine, ctor, thisObj, args) =>
+                ctor = eng.CreateFunction((engine, constr, thisObj, args) =>
                 {
-                    return engine.UndefinedValue;
+                    // todo
+                    return FromObject(publicConstructors.First().Invoke(new object[] { }));
                 }, t.Name);
-                result = fn.Prototype;
-
-                ProjectMethods(t.Name, fn, eng, publicStaticMethods);
-                ProjectProperties(t.Name, fn, eng, publicStaticProperties);
             }
             else
             {
-                result = eng.CreateObject();
+                ctor = eng.CreateFunction((engine, constr, thisObj, args) =>
+                {
+                    return eng.UndefinedValue;
+                }, t.Name);
             }
 
-            ProjectMethods(t.Name + ".prototype", result, eng, publicInstanceMethods);
-            ProjectProperties(t.Name + ".prototype", result, eng, publicInstanceProperties);
+            ProjectMethods(t.Name, ctor, eng, publicStaticMethods);
+            ProjectProperties(t.Name, ctor, eng, publicStaticProperties);
 
-            JavaScriptProjection projection = new JavaScriptProjection { Prototype = result, RefCount = 0, };
+            if (reflector.HasBaseType)
+            {
+                Type baseType = reflector.GetBaseType();
+                var baseTypeProjection = GetProjectionForType(baseType);
+
+                var prototypeObject = eng.CreateObject(baseTypeProjection.Prototype.Prototype);
+                ctor.Prototype = prototypeObject;
+                ctor.Prototype.SetPropertyByName("constructor", ctor);
+            }
+
+            ProjectMethods(t.Name + ".prototype", ctor.Prototype, eng, publicInstanceMethods);
+            ProjectProperties(t.Name + ".prototype", ctor.Prototype, eng, publicInstanceProperties);
+
+            JavaScriptProjection projection = new JavaScriptProjection { Prototype = ctor, RefCount = 0, };
             return projection;
         }
 
@@ -419,8 +437,8 @@ namespace Microsoft.Scripting.JavaScript
             int arity = -1;
             foreach (var candidate in methodCandidates)
             {
-                if (candidate.DeclaringType != external.GetType())
-                    continue;
+                //if (candidate.DeclaringType != external.GetType())
+                //    continue;
 
                 var paramCount = candidate.GetParameters().Length;
                 if (argsArray.Length == paramCount)
@@ -484,6 +502,10 @@ namespace Microsoft.Scripting.JavaScript
                         try
                         {
                             var val = ToObject(args.First());
+                            if (prop.PropertyType == typeof(int))
+                            {
+                                val = (int)(double)val;
+                            }
                             prop.SetValue(@this.ExternalObject, val);
                             return eng.UndefinedValue;
                         }
@@ -505,13 +527,13 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
-        private static bool AnyHaveSameArity(params MemberInfo[][] members)
+        private static bool AnyHaveSameArity(params IEnumerable<MemberInfo>[] members)
         {
-            foreach (MemberInfo[] memberset in members)
+            foreach (IEnumerable<MemberInfo> memberset in members)
             {
-                ConstructorInfo[] ctors = memberset as ConstructorInfo[];
-                MethodInfo[] methods = memberset as MethodInfo[];
-                PropertyInfo[] props = memberset as PropertyInfo[];
+                IEnumerable<ConstructorInfo> ctors = memberset as IEnumerable<ConstructorInfo>;
+                IEnumerable<MethodInfo> methods = memberset as IEnumerable<MethodInfo>;
+                IEnumerable<PropertyInfo> props = memberset as IEnumerable<PropertyInfo>;
                 HashSet<int> arities = new HashSet<int>();
 
                 if (ctors != null)
@@ -581,6 +603,74 @@ namespace Microsoft.Scripting.JavaScript
             result.Prototype = projection.Prototype;
 
             return result;
+        }
+
+        private abstract class ObjectReflector
+        {
+            public abstract IEnumerable<MethodInfo> GetMethods(bool instance);
+            public abstract IEnumerable<PropertyInfo> GetProperties(bool instance);
+            public abstract IEnumerable<ConstructorInfo> GetConstructors();
+            public abstract IEnumerable<EventInfo> GetEvents();
+            public abstract IEnumerable<FieldInfo> GetFields();
+
+            public static ObjectReflector Create(Type t)
+            {
+                return (ObjectReflector)Activator.CreateInstance(typeof(ObjectReflector<>).MakeGenericType(t));
+            }
+
+            public abstract bool HasBaseType
+            {
+                get;
+            }
+
+            public abstract Type GetBaseType();
+        }
+
+        private class ObjectReflector<T>
+            : ObjectReflector
+        {
+            private static readonly Type Type_ = typeof(T);
+            private static readonly TypeInfo TypeInfo_ = Type_.GetTypeInfo();
+
+            public override IEnumerable<ConstructorInfo> GetConstructors()
+            {
+                return Type_.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
+            }
+
+            public override IEnumerable<EventInfo> GetEvents()
+            {
+                // todo 
+                yield break;
+            }
+
+            public override IEnumerable<FieldInfo> GetFields()
+            {
+                // todo
+                yield break;
+            }
+
+            public override IEnumerable<MethodInfo> GetMethods(bool instance)
+            {
+                return TypeInfo_.DeclaredMethods.Where(m => (instance ? !m.IsStatic : m.IsStatic) && !m.Attributes.HasFlag(MethodAttributes.SpecialName));
+            }
+
+            public override IEnumerable<PropertyInfo> GetProperties(bool instance)
+            {
+                return TypeInfo_.DeclaredProperties.Where(p => (instance ? !(p.GetMethod?.IsStatic ?? p.SetMethod.IsStatic) : (p.GetMethod?.IsStatic ?? p.SetMethod.IsStatic)));
+            }
+
+            public override bool HasBaseType
+            {
+                get
+                {
+                    return TypeInfo_.BaseType != null;
+                }
+            }
+
+            public override Type GetBaseType()
+            {
+                return TypeInfo_.BaseType;
+            }
         }
     }
 }
