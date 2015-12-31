@@ -17,6 +17,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             public volatile int RefCount;
             public JavaScriptObject Prototype;
+            public JavaScriptFunction Constructor;
         }
 
         private WeakReference<JavaScriptEngine> engine_;
@@ -304,27 +305,27 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
-        internal JavaScriptObject GetProjectionForType(Type t)
+        internal JavaScriptObject GetProjectionPrototypeForType(Type t)
         {
             JavaScriptProjection baseTypeProjection;
 
             if (projectionTypes_.TryGetValue(t, out baseTypeProjection))
             {
                 Interlocked.Increment(ref baseTypeProjection.RefCount);
-                projectionTypes_[t] = baseTypeProjection;
             }
             else
             {
                 baseTypeProjection = InitializeProjectionForType(t);
                 baseTypeProjection.RefCount++;
             }
+            projectionTypes_[t] = baseTypeProjection;
 
             return baseTypeProjection.Prototype;
         }
 
         private JavaScriptProjection InitializeProjectionForType(Type t)
         {
-            if (t.GenericTypeArguments.Length > 0 && !t.IsConstructedGenericType)
+            /*if (t.GenericTypeArguments.Length > 0 && !t.IsConstructedGenericType)
                 throw new InvalidOperationException("The specified type is not a constructed generic types.  Only fully constructed types may be projected to JavaScript.");
 
             JavaScriptObject result;
@@ -378,7 +379,87 @@ namespace Microsoft.Scripting.JavaScript
             ProjectProperties(t.Name + ".prototype", ctor.Prototype, eng, publicInstanceProperties);
 
             JavaScriptProjection projection = new JavaScriptProjection { Prototype = ctor, RefCount = 0, };
-            return projection;
+            return projection; */
+            var eng = GetEngineAndClaimContext();
+
+            ObjectReflector reflector = ObjectReflector.Create(t);
+            JavaScriptProjection baseTypeProjection = null;
+            if (reflector.HasBaseType)
+            {
+                Type baseType = reflector.GetBaseType();
+                if (!projectionTypes_.TryGetValue(baseType, out baseTypeProjection))
+                {
+                    baseTypeProjection = InitializeProjectionForType(baseType);
+                    baseTypeProjection.RefCount += 1;
+                    projectionTypes_[baseType] = baseTypeProjection;
+                }
+            }
+
+            var publicConstructors = reflector.GetConstructors();
+            var publicInstanceProperties = reflector.GetProperties(instance: true);
+            var publicStaticProperties = reflector.GetProperties(instance: false);
+            var publicInstanceMethods = reflector.GetMethods(instance: true);
+            var publicStaticMethods = reflector.GetMethods(instance: false);
+
+            if (AnyHaveSameArity(publicConstructors, publicInstanceMethods, publicStaticMethods, publicInstanceProperties, publicStaticProperties))
+                throw new InvalidOperationException("The specified type cannot be marshaled; some publicly accessible members have the same arity.  Projected methods can't differentiate only by type (e.g., Add(int, int) and Add(float, float) would cause this error).");
+
+            JavaScriptFunction ctor;
+            if (publicConstructors.Any())
+            {
+                // e.g. var MyObject = function() { [native code] };
+                ctor = eng.CreateFunction((engine, constr, thisObj, args) =>
+                {
+                    // todo
+                    return FromObject(publicConstructors.First().Invoke(new object[] { }));
+                }, t.FullName);
+            }
+            else
+            {
+                ctor = eng.CreateFunction((engine, constr, thisObj, args) =>
+                {
+                    return eng.UndefinedValue;
+                }, t.FullName);
+            }
+
+            // MyObject.prototype = Object.create(baseTypeProjection.PrototypeObject);
+            var prototypeObj = CreateObjectFor(eng, baseTypeProjection);
+            ctor.SetPropertyByName("prototype", prototypeObj);
+            // MyObject.prototype.constructor = MyObject;
+            prototypeObj.SetPropertyByName("constructor", ctor);
+
+            // MyObject.CreateMyObject = function() { [native code] };
+            ProjectMethods(t.FullName, ctor, eng, publicStaticMethods);
+            // Object.defineProperty(MyObject, 'Foo', { get: function() { [native code] } });
+            ProjectProperties(t.FullName, ctor, eng, publicStaticProperties);
+
+            // MyObject.prototype.ToString = function() { [native code] };
+            ProjectMethods(t.FullName + ".prototype", prototypeObj, eng, publicInstanceMethods);
+            // Object.defineProperty(MyObject.prototype, 'baz', { get: function() { [native code] }, set: function() { [native code] } });
+            ProjectProperties(t.FullName + ".prototype", prototypeObj, eng, publicInstanceProperties);
+
+            prototypeObj.Freeze();
+
+            return new JavaScriptProjection { RefCount = 0, Constructor = ctor, Prototype = prototypeObj, };
+        }
+
+        // used by InitializeProjectionForType
+        private JavaScriptObject CreateObjectFor(JavaScriptEngine engine, JavaScriptProjection baseTypeProjection)
+        {
+            if (baseTypeProjection != null)
+            {
+                // todo: revisit to see if there is a better way to do this
+                // Can probably get 
+                // ((engine.GlobalObject.GetPropertyByName("Object") as JavaScriptObject).GetPropertyByName("create") as JavaScriptFunction).Invoke(baseTypeProjection.Prototype) 
+                // but this is so much clearer
+                dynamic global = engine.GlobalObject;
+                JavaScriptObject result = global.Object.create(baseTypeProjection.Prototype);
+                return result;
+            }
+            else
+            {
+                return engine.CreateObject();
+            }
         }
 
         private void ProjectMethods(string owningTypeName, JavaScriptObject target, JavaScriptEngine engine, IEnumerable<MethodInfo> methods)
@@ -419,10 +500,16 @@ namespace Microsoft.Scripting.JavaScript
                         return eng.UndefinedValue;
                     }
                 }, owningTypeName + "." + group.Key);
+                //var propDescriptor = engine.CreateObject();
+                //propDescriptor.SetPropertyByName("configurable", engine.TrueValue);
+                //propDescriptor.SetPropertyByName("enumerable", engine.TrueValue);
+                //propDescriptor.SetPropertyByName("value", method);
+                //target.DefineProperty(group.Key, propDescriptor);
                 target.SetPropertyByName(group.Key, method);
             }
         }
 
+        // todo: replace with a dynamic method thunk
         private MethodInfo GetBestFitMethod(IEnumerable<MethodInfo> methodCandidates, JavaScriptValue thisObj, JavaScriptValue[] argsArray)
         {
             JavaScriptObject @this = thisObj as JavaScriptObject;

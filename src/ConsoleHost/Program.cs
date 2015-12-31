@@ -16,15 +16,19 @@ namespace ConsoleHost
             {
                 engine.SetGlobalFunction("echo", Echo);
                 engine.AddTypeToGlobal<Point3D>();
+                engine.AddTypeToGlobal<Point>();
                 var pt = new Point3D { X = 18, Y = 27, Z = -1 };
                 //engine.SetGlobalVariable("pt", engine.Converter.FromObject(pt));
                 engine.RuntimeExceptionRaised += (sender, e) =>
                 {
-                    var error = engine.GetAndClearException();
+                    dynamic error = engine.GetAndClearException();
                     dynamic glob = engine.GlobalObject;
                     var color = Console.ForegroundColor;
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("Script error occurred: {0}", glob.JSON.stringify(error));
+                    var err = glob.JSON.stringify(error);
+                    if ((string)err == "{}")
+                        err = engine.Converter.ToString(error);
+                    Console.WriteLine("Script error occurred: {0}", (string)err);
                     Console.ForegroundColor = color;
                 };
 
@@ -35,7 +39,7 @@ namespace ConsoleHost
     echo('{0}', o.X);
     o.Y = 189;
     o.Z = -254.341;
-    echo(o.ToString());
+    echo('o after mutation? {0}', o.ToString());
     echo('{0}, {1}!', 'Hello', 'world');
     //echo('{0}', pt.X);
     //echo('{0}', pt.Y);

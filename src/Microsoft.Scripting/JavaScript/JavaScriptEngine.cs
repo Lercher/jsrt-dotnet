@@ -706,8 +706,8 @@ namespace Microsoft.Scripting.JavaScript
                 name = t.Name;
             }
 
-            var proj = Converter.GetProjectionForType(t);
-            SetGlobalVariable(name, proj);
+            var proj = Converter.GetProjectionPrototypeForType(t);
+            SetGlobalVariable(name, proj.GetPropertyByName("constructor"));
         }
 
         #region IDisposable implementation

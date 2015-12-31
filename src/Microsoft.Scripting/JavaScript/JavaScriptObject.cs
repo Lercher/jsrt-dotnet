@@ -321,7 +321,7 @@ namespace Microsoft.Scripting.JavaScript
             Errors.ThrowIfIs(api_.JsGetPropertyIdFromName(propertyName, out propId));
 
             bool wasSet;
-            Errors.ThrowIfIs(api_.JsDefineProperty(handle_, propId, descriptor.handle_, out wasSet));
+            Errors.CheckForScriptExceptionOrThrow(api_.JsDefineProperty(handle_, propId, descriptor.handle_, out wasSet), eng);
         }
 
         public void DefineProperties(JavaScriptObject propertiesContainer)
