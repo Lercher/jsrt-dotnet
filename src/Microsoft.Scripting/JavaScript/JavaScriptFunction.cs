@@ -22,7 +22,7 @@ namespace Microsoft.Scripting.JavaScript
             if (argsArray.Length > ushort.MaxValue)
                 throw new ArgumentOutOfRangeException(nameof(args));
 
-            var eng = GetEngineAndClaimContext();
+            var eng = GetEngine();
             JavaScriptValueSafeHandle resultHandle;
             Errors.CheckForScriptExceptionOrThrow(api_.JsCallFunction(handle_, argsArray, (ushort)argsArray.Length, out resultHandle), eng);
             if (resultHandle.IsInvalid)
@@ -37,7 +37,7 @@ namespace Microsoft.Scripting.JavaScript
             if (argsArray.Length > ushort.MaxValue)
                 throw new ArgumentOutOfRangeException(nameof(args));
 
-            var eng = GetEngineAndClaimContext();
+            var eng = GetEngine();
             JavaScriptValueSafeHandle resultHandle;
             Errors.CheckForScriptExceptionOrThrow(api_.JsConstructObject(handle_, argsArray, (ushort)argsArray.Length, out resultHandle), eng);
             if (resultHandle.IsInvalid)
@@ -48,7 +48,7 @@ namespace Microsoft.Scripting.JavaScript
 
         public JavaScriptFunction Bind(JavaScriptObject thisObject, IEnumerable<JavaScriptValue> args)
         {
-            var eng = GetEngineAndClaimContext();
+            var eng = GetEngine();
 
             if (thisObject == null)
                 thisObject = eng.NullValue;
@@ -61,7 +61,7 @@ namespace Microsoft.Scripting.JavaScript
 
         public JavaScriptValue Apply(JavaScriptObject thisObject, JavaScriptArray args = null)
         {
-            var eng = GetEngineAndClaimContext();
+            var eng = GetEngine();
             if (thisObject == null)
                 thisObject = eng.NullValue;
 
@@ -77,7 +77,7 @@ namespace Microsoft.Scripting.JavaScript
 
         public JavaScriptValue Call(JavaScriptObject thisObject, IEnumerable<JavaScriptValue> args)
         {
-            var eng = GetEngineAndClaimContext();
+            var eng = GetEngine();
             if (thisObject == null)
                 thisObject = eng.NullValue;
             if (args == null)

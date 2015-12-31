@@ -30,7 +30,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             get
             {
-                var eng = GetEngineAndClaimContext();
+                var eng = GetEngine();
                 var val = GetPropertyByName("byteLength");
                 return (uint)eng.Converter.ToDouble(val);
             }
@@ -40,7 +40,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             get
             {
-                var eng = GetEngineAndClaimContext();
+                var eng = GetEngine();
                 var val = GetPropertyByName("byteOffset");
                 return (uint)eng.Converter.ToDouble(val);
             }
@@ -61,7 +61,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             get
             {
-                var eng = GetEngineAndClaimContext();
+                var eng = GetEngine();
                 var val = GetPropertyByName("length");
                 return (uint)eng.Converter.ToDouble(val);
             }
@@ -77,7 +77,7 @@ namespace Microsoft.Scripting.JavaScript
 
         private JavaScriptTypedArrayType GetArrayType()
         {
-            GetEngineAndClaimContext();
+            GetEngine();
             IntPtr buf;
             uint len;
             JavaScriptTypedArrayType type;

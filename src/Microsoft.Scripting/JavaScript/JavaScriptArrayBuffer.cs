@@ -20,7 +20,7 @@ namespace Microsoft.Scripting.JavaScript
 
         private uint GetLength()
         {
-            var eng = GetEngineAndClaimContext();
+            var eng = GetEngine();
             IntPtr buffer;
             uint len;
             Errors.ThrowIfIs(api_.JsGetArrayBufferStorage(handle_, out buffer, out len));
@@ -38,7 +38,7 @@ namespace Microsoft.Scripting.JavaScript
 
         public unsafe Stream GetUnderlyingMemory()
         {
-            var eng = GetEngineAndClaimContext();
+            var eng = GetEngine();
             IntPtr buffer;
             uint len;
             Errors.ThrowIfIs(api_.JsGetArrayBufferStorage(handle_, out buffer, out len));
@@ -48,7 +48,7 @@ namespace Microsoft.Scripting.JavaScript
 
         internal unsafe Tuple<IntPtr, uint> GetUnderlyingMemoryInfo()
         {
-            var eng = GetEngineAndClaimContext();
+            var eng = GetEngine();
             IntPtr buffer;
             uint len;
             Errors.ThrowIfIs(api_.JsGetArrayBufferStorage(handle_, out buffer, out len));

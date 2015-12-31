@@ -8,15 +8,16 @@ namespace ConsoleHost
 {
     class Program
     {
-        [STAThread]
         static void Main(string[] args)
         {
-            using (var runtime = new JavaScriptRuntime())
-            using (var engine = runtime.CreateEngine())
+            var runtime = new JavaScriptRuntime();
+            var engine = runtime.CreateEngine();
+            using (var context = engine.AcquireContext())
             {
                 engine.SetGlobalFunction("echo", Echo);
                 engine.AddTypeToGlobal<Point3D>();
                 engine.AddTypeToGlobal<Point>();
+                engine.AddTypeToGlobal<Toaster>();
                 var pt = new Point3D { X = 18, Y = 27, Z = -1 };
                 //engine.SetGlobalVariable("pt", engine.Converter.FromObject(pt));
                 engine.RuntimeExceptionRaised += (sender, e) =>
@@ -33,6 +34,12 @@ namespace ConsoleHost
                 };
 
                 var fn = engine.EvaluateScriptText(@"(function() {
+    var t = new Toaster();
+    t.StartToasting();
+    t.addEventListener('toastcompleted', function(e) {
+        echo('Toast is done!');
+        echo('{0}', JSON.stringify(e));
+    });
     var o = new Point3D(1, 2, 3);
     echo(o.toString());
     o.X = 254;
@@ -48,6 +55,7 @@ namespace ConsoleHost
     //echo('{0}', pt.ToString());
 })();");
                 fn.Invoke(Enumerable.Empty<JavaScriptValue>());
+                var obj = engine.CreateObject();
 
                 dynamic fnAsDynamic = fn;
                 fnAsDynamic.foo = 24;
@@ -62,6 +70,7 @@ namespace ConsoleHost
                     echo(name);
                 }
             }
+
             Console.ReadLine();
         }
 

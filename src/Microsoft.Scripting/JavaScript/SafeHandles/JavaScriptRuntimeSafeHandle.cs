@@ -37,7 +37,7 @@ namespace Microsoft.Scripting.JavaScript.SafeHandles
 
             var toRelease = this.handle;
 
-            var error = ChakraApi.Instance.JsSetCurrentContext(new JavaScriptEngineSafeHandle(IntPtr.Zero));
+            var error = ChakraApi.Instance.JsReleaseCurrentContext();
             Debug.Assert(error == JsErrorCode.JsNoError);
 
             error = ChakraApi.Instance.JsDisposeRuntime(toRelease);

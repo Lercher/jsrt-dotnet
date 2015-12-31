@@ -70,7 +70,7 @@ namespace Microsoft.Scripting.JavaScript
             handlesToRelease_ = new List<IntPtr>();
             handleReleaseLock_ = new object();
 
-            ClaimContext();
+            ClaimContextPrivate();
             JavaScriptValueSafeHandle global;
             Errors.ThrowIfIs(api_.JsGetGlobalObject(out global));
             global_ = CreateObjectFromHandle(global);
@@ -86,6 +86,7 @@ namespace Microsoft.Scripting.JavaScript
             JavaScriptValueSafeHandle @false;
             Errors.ThrowIfIs(api_.JsGetFalseValue(out @false));
             false_ = CreateValueFromHandle(@false);
+            ReleaseContextPrivate();
         }
 
         public JavaScriptRuntime Runtime
@@ -125,7 +126,13 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
-        internal void ClaimContext()
+        public JavaScriptExecutionContext AcquireContext()
+        {
+            ClaimContextPrivate();
+            return new JavaScriptExecutionContext(this, ReleaseContextPrivate);
+        }
+
+        private void ClaimContextPrivate()
         {
             if (handle_ == null)
                 throw new ObjectDisposedException(nameof(JavaScriptEngine));
@@ -134,7 +141,7 @@ namespace Microsoft.Scripting.JavaScript
 
             if (handlesToRelease_.Count > 0)
             {
-                lock(handleReleaseLock_)
+                lock (handleReleaseLock_)
                 {
                     foreach (IntPtr handle in handlesToRelease_)
                     {
@@ -148,77 +155,96 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
+        private void ReleaseContextPrivate()
+        {
+            Errors.ThrowIfIs(api_.JsReleaseCurrentContext());
+        }
+
         internal JavaScriptValue CreateValueFromHandle(JavaScriptValueSafeHandle handle)
         {
             Debug.Assert(!(handle.IsClosed || handle.IsInvalid));
 
-            ClaimContext();
-
             JsValueType kind;
             Errors.ThrowIfIs(api_.JsGetValueType(handle, out kind));
 
+            JavaScriptValue result = null;
             switch (kind)
             {
                 case JsValueType.JsArray:
-                    return new JavaScriptArray(handle, JavaScriptValueType.Array, this);
+                    result = new JavaScriptArray(handle, JavaScriptValueType.Array, this);
+                    break;
 
                 case JsValueType.JsFunction:
-                    return new JavaScriptFunction(handle, JavaScriptValueType.Function, this);
+                    result =new JavaScriptFunction(handle, JavaScriptValueType.Function, this);
+                    break;
 
                 case JsValueType.JsObject:
                 case JsValueType.JsNull:
                 case JsValueType.JsError:
-                    return new JavaScriptObject(handle, JavaScriptValueType.Object, this);
+                    result = new JavaScriptObject(handle, JavaScriptValueType.Object, this);
+                    break;
 
                 case JsValueType.JsSymbol:
-                    return new JavaScriptSymbol(handle, JavaScriptValueType.Symbol, this);
+                    result = new JavaScriptSymbol(handle, JavaScriptValueType.Symbol, this);
+                    break;
 
                 case JsValueType.JsArrayBuffer:
-                    return new JavaScriptArrayBuffer(handle, JavaScriptValueType.ArrayBuffer, this);
+                    result = new JavaScriptArrayBuffer(handle, JavaScriptValueType.ArrayBuffer, this);
+                    break;
 
                 case JsValueType.JsTypedArray:
-                    return new JavaScriptTypedArray(handle, JavaScriptValueType.TypedArray, this);
+                    result = new JavaScriptTypedArray(handle, JavaScriptValueType.TypedArray, this);
+                    break;
 
                 case JsValueType.JsDataView:
-                    return new JavaScriptDataView(handle, JavaScriptValueType.DataView, this);
+                    result = new JavaScriptDataView(handle, JavaScriptValueType.DataView, this);
+                    break;
 
                 case JsValueType.JsBoolean:
                 case JsValueType.JsNumber:
                 case JsValueType.JsString:
                 case JsValueType.JsUndefined:
                 default:
-                    return new JavaScriptValue(handle, kind.ToApiValueType(), this);
+                    result = new JavaScriptValue(handle, kind.ToApiValueType(), this);
+                    break;
             }
+            
+            return result;
         }
 
         internal JavaScriptObject CreateObjectFromHandle(JavaScriptValueSafeHandle handle)
         {
-            ClaimContext();
-
             JsValueType kind;
             Errors.ThrowIfIs(api_.JsGetValueType(handle, out kind));
 
+            JavaScriptObject result = null;
             switch (kind)
             {
                 case JsValueType.JsArray:
-                    return new JavaScriptArray(handle, JavaScriptValueType.Array, this);
+                    result = new JavaScriptArray(handle, JavaScriptValueType.Array, this);
+                    break;
 
                 case JsValueType.JsFunction:
-                    return new JavaScriptFunction(handle, JavaScriptValueType.Function, this);
+                    result = new JavaScriptFunction(handle, JavaScriptValueType.Function, this);
+                    break;
 
                 case JsValueType.JsObject:
                 case JsValueType.JsError:
                 case JsValueType.JsNull:
-                    return new JavaScriptObject(handle, JavaScriptValueType.Object, this);
+                    result = new JavaScriptObject(handle, JavaScriptValueType.Object, this);
+                    break;
 
                 case JsValueType.JsArrayBuffer:
-                    return new JavaScriptArrayBuffer(handle, JavaScriptValueType.ArrayBuffer, this);
+                    result = new JavaScriptArrayBuffer(handle, JavaScriptValueType.ArrayBuffer, this);
+                    break;
 
                 case JsValueType.JsTypedArray:
-                    return new JavaScriptTypedArray(handle, JavaScriptValueType.TypedArray, this);
+                    result = new JavaScriptTypedArray(handle, JavaScriptValueType.TypedArray, this);
+                    break;
 
                 case JsValueType.JsDataView:
-                    return new JavaScriptDataView(handle, JavaScriptValueType.DataView, this);
+                    result = new JavaScriptDataView(handle, JavaScriptValueType.DataView, this);
+                    break;
 
                 case JsValueType.JsBoolean:
                 case JsValueType.JsNumber:
@@ -228,19 +254,20 @@ namespace Microsoft.Scripting.JavaScript
                 default:
                     throw new ArgumentException();
             }
+
+            return result;
         }
 
         internal JavaScriptArray CreateArrayFromHandle(JavaScriptValueSafeHandle handle)
         {
-            ClaimContext();
-
             JsValueType kind;
             Errors.ThrowIfIs(api_.JsGetValueType(handle, out kind));
 
             switch (kind)
             {
                 case JsValueType.JsArray:
-                    return new JavaScriptArray(handle, JavaScriptValueType.Array, this);
+                    var result = new JavaScriptArray(handle, JavaScriptValueType.Array, this);
+                    return result;
 
                 case JsValueType.JsFunction:
                 case JsValueType.JsObject:
@@ -305,8 +332,6 @@ namespace Microsoft.Scripting.JavaScript
         {
             get
             {
-                ClaimContext();
-
                 bool has;
                 Errors.ThrowIfIs(api_.JsHasException(out has));
 
@@ -334,8 +359,6 @@ namespace Microsoft.Scripting.JavaScript
             if (source == null)
                 throw new ArgumentNullException(nameof(source));
 
-            ClaimContext();
-
             JavaScriptValueSafeHandle handle;
             Errors.ThrowIfIs(api_.JsParseScript(source.SourceText, source.SourceContextId, source.SourceLocation, out handle));
 
@@ -349,8 +372,6 @@ namespace Microsoft.Scripting.JavaScript
 
         public unsafe void Compile(ScriptSource source, Stream compiledCodeDestination)
         {
-            ClaimContext();
-
             uint bufferSize = 0;
             Errors.ThrowIfIs(api_.JsSerializeScript(source.SourceText, IntPtr.Zero, ref bufferSize));
             if (bufferSize > int.MaxValue)
@@ -376,7 +397,6 @@ namespace Microsoft.Scripting.JavaScript
             if (source == null)
                 throw new ArgumentNullException(nameof(source));
 
-            ClaimContext();
             JavaScriptValueSafeHandle handle;
             Errors.CheckForScriptExceptionOrThrow(api_.JsRunScript(source.SourceText, source.SourceContextId, source.SourceLocation, out handle), this);
             if (handle.IsInvalid)
@@ -394,8 +414,6 @@ namespace Microsoft.Scripting.JavaScript
         #region Main interaction functions
         public JavaScriptObject CreateObject(JavaScriptObject prototype = null)
         {
-            ClaimContext();
-
             JavaScriptValueSafeHandle handle;
             Errors.ThrowIfIs(api_.JsCreateObject(out handle));
 
@@ -438,7 +456,6 @@ namespace Microsoft.Scripting.JavaScript
             GCHandle handle = GCHandle.Alloc(thunk);
             externalObjects_.Add(thunk);
 
-            ClaimContext();
             JavaScriptValueSafeHandle result;
             Errors.ThrowIfIs(api_.JsCreateExternalObject(GCHandle.ToIntPtr(handle), FinalizerCallbackPtr, out result));
 
@@ -449,7 +466,6 @@ namespace Microsoft.Scripting.JavaScript
         {
             Debug.Assert(value != null);
 
-            ClaimContext();
             IntPtr handlePtr;
             Errors.ThrowIfIs(api_.JsGetExternalData(value.handle_, out handlePtr));
             GCHandle gcHandle = GCHandle.FromIntPtr(handlePtr);
@@ -475,7 +491,6 @@ namespace Microsoft.Scripting.JavaScript
 
         public TimeSpan RunIdleWork()
         {
-            ClaimContext();
             uint nextTick;
             Errors.ThrowIfIs(api_.JsIdle(out nextTick));
 
@@ -524,8 +539,6 @@ namespace Microsoft.Scripting.JavaScript
         {
             if (length < 0)
                 throw new ArgumentOutOfRangeException(nameof(length));
-
-            ClaimContext();
 
             JavaScriptValueSafeHandle handle;
             Errors.ThrowIfIs(api_.JsCreateArray(unchecked((uint)length), out handle));
@@ -582,8 +595,6 @@ namespace Microsoft.Scripting.JavaScript
             if (hostFunction == null)
                 throw new ArgumentNullException(nameof(hostFunction));
 
-            ClaimContext();
-
             NativeFunctionThunkData td = new NativeFunctionThunkData() { callback = hostFunction, engine = new WeakReference<JavaScriptEngine>(this) };
             GCHandle handle = GCHandle.Alloc(td, GCHandleType.Weak);
             nativeFunctionThunks_.Add(td);
@@ -601,8 +612,6 @@ namespace Microsoft.Scripting.JavaScript
             if (string.IsNullOrEmpty(name))
                 throw new ArgumentNullException(nameof(name));
 
-            ClaimContext();
-
             var nameVal = Converter.FromString(name);
 
             NativeFunctionThunkData td = new NativeFunctionThunkData() { callback = hostFunction, engine = new WeakReference<JavaScriptEngine>(this) };
@@ -617,8 +626,6 @@ namespace Microsoft.Scripting.JavaScript
 
         public JavaScriptValue GetAndClearException()
         {
-            ClaimContext();
-
             JavaScriptValueSafeHandle handle;
             Errors.ThrowIfIs(api_.JsGetAndClearException(out handle));
 
@@ -630,7 +637,6 @@ namespace Microsoft.Scripting.JavaScript
             if (exception == null)
                 throw new ArgumentNullException(nameof(exception));
 
-            ClaimContext();
             Errors.ThrowIfIs(api_.JsSetException(exception.handle_));
         }
         #endregion
@@ -693,8 +699,6 @@ namespace Microsoft.Scripting.JavaScript
 
         public void EnableDebugging()
         {
-            ClaimContext();
-
             Errors.ThrowIfIs(api_.JsStartDebugging());
         }
 

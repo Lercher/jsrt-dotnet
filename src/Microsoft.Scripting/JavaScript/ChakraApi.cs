@@ -361,6 +361,11 @@
 
         public readonly FnJsSetCurrentContext JsSetCurrentContext;
 
+        public JsErrorCode JsReleaseCurrentContext()
+        {
+            return JsSetCurrentContext(new JavaScriptEngineSafeHandle(IntPtr.Zero));
+        }
+
         public readonly FnJsBooleanToBool JsBooleanToBool;
 
         public readonly FnJsConvertValueToBoolean JsConvertValueToBoolean;

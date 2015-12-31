@@ -29,7 +29,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             get
             {
-                var eng = GetEngineAndClaimContext();
+                var eng = GetEngine();
                 var val = GetPropertyByName("byteLength");
                 return (uint)eng.Converter.ToDouble(val);
             }
@@ -39,7 +39,7 @@ namespace Microsoft.Scripting.JavaScript
         {
             get
             {
-                var eng = GetEngineAndClaimContext();
+                var eng = GetEngine();
                 var val = GetPropertyByName("byteOffset");
                 return (uint)eng.Converter.ToDouble(val);
             }

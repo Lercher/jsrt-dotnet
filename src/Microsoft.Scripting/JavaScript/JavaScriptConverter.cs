@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -18,17 +19,21 @@ namespace Microsoft.Scripting.JavaScript
             public volatile int RefCount;
             public JavaScriptObject Prototype;
             public JavaScriptFunction Constructor;
+            public bool HasStaticEvents;
+            public bool HasInstanceEvents;
         }
 
         private WeakReference<JavaScriptEngine> engine_;
         private ChakraApi api_;
         private Dictionary<Type, JavaScriptProjection> projectionTypes_;
+        private Dictionary<Type, Expression> eventMarshallers_;
 
         public JavaScriptConverter(JavaScriptEngine engine)
         {
             engine_ = new WeakReference<JavaScriptEngine>(engine);
             api_ = engine.Api;
             projectionTypes_ = new Dictionary<Type, JavaScriptProjection>();
+            eventMarshallers_ = new Dictionary<Type, Expression>();
         }
 
         private JavaScriptEngine GetEngine()
@@ -43,7 +48,6 @@ namespace Microsoft.Scripting.JavaScript
         private JavaScriptEngine GetEngineAndClaimContext()
         {
             var result = GetEngine();
-            result.ClaimContext();
 
             return result;
         }
@@ -325,61 +329,6 @@ namespace Microsoft.Scripting.JavaScript
 
         private JavaScriptProjection InitializeProjectionForType(Type t)
         {
-            /*if (t.GenericTypeArguments.Length > 0 && !t.IsConstructedGenericType)
-                throw new InvalidOperationException("The specified type is not a constructed generic types.  Only fully constructed types may be projected to JavaScript.");
-
-            JavaScriptObject result;
-            var eng = GetEngineAndClaimContext();
-
-            ObjectReflector reflector = ObjectReflector.Create(t);
-
-            var publicConstructors = reflector.GetConstructors();
-            var publicInstanceProperties = reflector.GetProperties(instance: true);
-            var publicStaticProperties = reflector.GetProperties(instance: false);
-            var publicInstanceMethods = reflector.GetMethods(instance: true);
-            var publicStaticMethods = reflector.GetMethods(instance: false);
-
-            if (AnyHaveSameArity(publicConstructors, publicInstanceMethods, publicStaticMethods, publicInstanceProperties, publicStaticProperties))
-                throw new InvalidOperationException("The specified type cannot be marshaled; some publicly accessible members have the same arity.  Projected methods can't differentiate only by type (e.g., Add(int, int) and Add(float, float) would cause this error).");
-
-            // todo:
-            // fields
-            // events
-            JavaScriptFunction ctor;
-            if (publicConstructors.Any())
-            {
-                ctor = eng.CreateFunction((engine, constr, thisObj, args) =>
-                {
-                    // todo
-                    return FromObject(publicConstructors.First().Invoke(new object[] { }));
-                }, t.Name);
-            }
-            else
-            {
-                ctor = eng.CreateFunction((engine, constr, thisObj, args) =>
-                {
-                    return eng.UndefinedValue;
-                }, t.Name);
-            }
-
-            ProjectMethods(t.Name, ctor, eng, publicStaticMethods);
-            ProjectProperties(t.Name, ctor, eng, publicStaticProperties);
-
-            if (reflector.HasBaseType)
-            {
-                Type baseType = reflector.GetBaseType();
-                var baseTypeProjection = GetProjectionForType(baseType);
-
-                var prototypeObject = eng.CreateObject(baseTypeProjection.Prototype.Prototype);
-                ctor.Prototype = prototypeObject;
-                ctor.Prototype.SetPropertyByName("constructor", ctor);
-            }
-
-            ProjectMethods(t.Name + ".prototype", ctor.Prototype, eng, publicInstanceMethods);
-            ProjectProperties(t.Name + ".prototype", ctor.Prototype, eng, publicInstanceProperties);
-
-            JavaScriptProjection projection = new JavaScriptProjection { Prototype = ctor, RefCount = 0, };
-            return projection; */
             var eng = GetEngineAndClaimContext();
 
             ObjectReflector reflector = ObjectReflector.Create(t);
@@ -400,6 +349,8 @@ namespace Microsoft.Scripting.JavaScript
             var publicStaticProperties = reflector.GetProperties(instance: false);
             var publicInstanceMethods = reflector.GetMethods(instance: true);
             var publicStaticMethods = reflector.GetMethods(instance: false);
+            var publicInstanceEvents = reflector.GetEvents(instance: true);
+            var publicStaticEvents = reflector.GetEvents(instance: false);
 
             if (AnyHaveSameArity(publicConstructors, publicInstanceMethods, publicStaticMethods, publicInstanceProperties, publicStaticProperties))
                 throw new InvalidOperationException("The specified type cannot be marshaled; some publicly accessible members have the same arity.  Projected methods can't differentiate only by type (e.g., Add(int, int) and Add(float, float) would cause this error).");
@@ -432,15 +383,28 @@ namespace Microsoft.Scripting.JavaScript
             ProjectMethods(t.FullName, ctor, eng, publicStaticMethods);
             // Object.defineProperty(MyObject, 'Foo', { get: function() { [native code] } });
             ProjectProperties(t.FullName, ctor, eng, publicStaticProperties);
+            // MyObject.addEventListener = function() { [native code] };
+            if ((baseTypeProjection?.HasStaticEvents ?? false) || publicStaticEvents.Any())
+                ProjectEvents(t.FullName, ctor, eng, publicStaticEvents, baseTypeProjection, instance: false);
 
             // MyObject.prototype.ToString = function() { [native code] };
             ProjectMethods(t.FullName + ".prototype", prototypeObj, eng, publicInstanceMethods);
             // Object.defineProperty(MyObject.prototype, 'baz', { get: function() { [native code] }, set: function() { [native code] } });
             ProjectProperties(t.FullName + ".prototype", prototypeObj, eng, publicInstanceProperties);
+            // MyObject.prototype.addEventListener = function() { [native code] };
+            if ((baseTypeProjection?.HasInstanceEvents ?? false) || publicInstanceEvents.Any())
+                ProjectEvents(t.FullName + ".prototype", prototypeObj, eng, publicInstanceEvents, baseTypeProjection, instance: true);
 
             prototypeObj.Freeze();
 
-            return new JavaScriptProjection { RefCount = 0, Constructor = ctor, Prototype = prototypeObj, };
+            return new JavaScriptProjection
+            {
+                RefCount = 0,
+                Constructor = ctor,
+                Prototype = prototypeObj,
+                HasInstanceEvents = baseTypeProjection?.HasInstanceEvents ?? publicInstanceEvents.Any(),
+                HasStaticEvents = baseTypeProjection?.HasStaticEvents ?? publicStaticEvents.Any(),
+            };
         }
 
         // used by InitializeProjectionForType
@@ -666,6 +630,63 @@ namespace Microsoft.Scripting.JavaScript
             return false;
         }
 
+        private void ProjectEvents(string owningTypeName, JavaScriptObject target, JavaScriptEngine engine, IEnumerable<EventInfo> events, JavaScriptProjection baseTypeProjection, bool instance)
+        {
+            var eventsArray = events.ToArray();
+            var eventsLookup = eventsArray.ToDictionary(ei => ei.Name.ToLower());
+            // General approach here
+            // if there is a base thing, invoke that
+            // for each event, register a delegate that marshals it back to JavaScript
+            var add = engine.CreateFunction((eng, ctor, thisObj, args) =>
+            {
+                bool callBase = ((instance ? baseTypeProjection?.HasInstanceEvents : baseTypeProjection?.HasStaticEvents) ?? false);
+                if (callBase)
+                {
+                    var baseObj = instance ? baseTypeProjection.Prototype : baseTypeProjection.Constructor;
+                    var baseFn = baseObj.GetPropertyByName("addEventListener") as JavaScriptFunction;
+                    if (baseFn != null)
+                    {
+                        baseFn.Call(instance ? target : baseObj, args);
+                    }
+                }
+
+                var @this = thisObj as JavaScriptObject;
+                if (@this == null)
+                    return eng.UndefinedValue;
+
+                var argsArray = args.ToArray();
+                if (argsArray.Length < 2)
+                    return eng.UndefinedValue;
+
+                string eventName = argsArray[0].ToString();
+                JavaScriptFunction callbackFunction = argsArray[1] as JavaScriptFunction;
+                if (callbackFunction == null)
+                    return eng.UndefinedValue;
+
+                EventInfo curEvent;
+                if (!eventsLookup.TryGetValue(eventName, out curEvent))
+                    return eng.UndefinedValue;
+
+                MethodInfo targetMethod = curEvent.EventHandlerType.GetMethod("Invoke");
+
+                var paramsExpr = targetMethod.GetParameters().Select(p => Expression.Parameter(p.ParameterType, p.Name)).ToArray();
+                int cookie = EventMarshaler.RegisterDelegate(callbackFunction, SynchronizationContext.Current);
+
+                var marshaler = Expression.Lambda(curEvent.EventHandlerType, Expression.Block(
+                    Expression.Call(
+                        typeof(EventMarshaler).GetMethod(nameof(EventMarshaler.InvokeJavaScriptCallback)), 
+                        Expression.Constant(cookie), 
+                        Expression.NewArrayInit(typeof(string), targetMethod.GetParameters().Select(p => Expression.Constant(p.Name))),
+                        Expression.NewArrayInit(typeof(object), paramsExpr))
+                ), paramsExpr);
+
+                curEvent.AddMethod.Invoke(@this.ExternalObject, new object[] { marshaler.Compile() });
+
+                return eng.UndefinedValue;
+            }, owningTypeName + ".addEventListener");
+            target.SetPropertyByName("addEventListener", add);
+        }
+
         private JavaScriptObject InitializeProjectionForObject(object target)
         {
             Type t = target.GetType();
@@ -697,8 +718,8 @@ namespace Microsoft.Scripting.JavaScript
             public abstract IEnumerable<MethodInfo> GetMethods(bool instance);
             public abstract IEnumerable<PropertyInfo> GetProperties(bool instance);
             public abstract IEnumerable<ConstructorInfo> GetConstructors();
-            public abstract IEnumerable<EventInfo> GetEvents();
-            public abstract IEnumerable<FieldInfo> GetFields();
+            public abstract IEnumerable<EventInfo> GetEvents(bool instance);
+            public abstract IEnumerable<FieldInfo> GetFields(bool instance); 
 
             public static ObjectReflector Create(Type t)
             {
@@ -724,13 +745,12 @@ namespace Microsoft.Scripting.JavaScript
                 return Type_.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
             }
 
-            public override IEnumerable<EventInfo> GetEvents()
+            public override IEnumerable<EventInfo> GetEvents(bool instance)
             {
-                // todo 
-                yield break;
+                return TypeInfo_.DeclaredEvents.Where(e => (instance ? !e.AddMethod.IsStatic : e.AddMethod.IsStatic));
             }
 
-            public override IEnumerable<FieldInfo> GetFields()
+            public override IEnumerable<FieldInfo> GetFields(bool instance)
             {
                 // todo
                 yield break;
@@ -758,6 +778,68 @@ namespace Microsoft.Scripting.JavaScript
             {
                 return TypeInfo_.BaseType;
             }
+        }
+    }
+
+    internal static class EventMarshaler
+    {
+        private static Dictionary<int, Tuple<JavaScriptFunction, SynchronizationContext>> eventRegistrations = new Dictionary<int, Tuple<JavaScriptFunction, SynchronizationContext>>();
+        private static volatile int registrationTokens = 0;
+
+        public static int RegisterDelegate(JavaScriptFunction callback, SynchronizationContext syncContext)
+        {
+            var cookie = Interlocked.Increment(ref registrationTokens);
+            eventRegistrations[cookie] = Tuple.Create(callback, syncContext);
+            return cookie;
+        }
+
+        public static void RemoveDelegate(int cookie)
+        {
+            eventRegistrations.Remove(cookie);
+        }
+
+        public static void InvokeJavaScriptCallback(int cookie, string[] names, object[] values)
+        {
+            Tuple<JavaScriptFunction, SynchronizationContext> registration;
+
+            Debug.Assert(names != null);
+            Debug.Assert(values != null);
+            Debug.Assert(names.Length == values.Length);
+
+            if (!eventRegistrations.TryGetValue(cookie, out registration))
+                return;
+            if (registration.Item2 == null) // synchronization context
+            {
+                var eng = registration.Item1.GetEngine();
+                using (var context = eng.AcquireContext())
+                {
+                    var jsObj = eng.CreateObject();
+                    for (int i = 0; i < names.Length; i++)
+                    {
+                        jsObj.SetPropertyByName(names[i], eng.Converter.FromObject(values[i]));
+                    }
+
+                    registration.Item1.Invoke(new[] { jsObj });
+                }
+            }
+            else
+            {
+                registration.Item2.Post((s) =>
+                {
+                    var eng = registration.Item1.GetEngine();
+                    using (var context = eng.AcquireContext())
+                    {
+                        var jsObj = eng.CreateObject();
+                        for (int i = 0; i < names.Length; i++)
+                        {
+                            jsObj.SetPropertyByName(names[i], eng.Converter.FromObject(values[i]));
+                        }
+
+                        registration.Item1.Invoke(new[] { jsObj });
+                    }
+                }, null);
+            }
+            
         }
     }
 }
