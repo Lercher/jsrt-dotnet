@@ -18,6 +18,7 @@ namespace Microsoft.Scripting.JavaScript
 
         }
 
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public JavaScriptArray Keys
         {
             get
@@ -28,7 +29,7 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
-        [DebuggerHidden]
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public bool IsExtensible
         {
             get
@@ -42,7 +43,7 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
-        [DebuggerHidden]
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public JavaScriptObject Prototype
         {
             get
@@ -64,6 +65,7 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public object ExternalObject
         {
             get
@@ -73,7 +75,7 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
-        [DebuggerHidden]
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public bool IsSealed
         {
             get
@@ -85,7 +87,7 @@ namespace Microsoft.Scripting.JavaScript
             }
         }
 
-        [DebuggerHidden]
+        [DebuggerBrowsable(DebuggerBrowsableState.Never)]
         public bool IsFrozen
         {
             get

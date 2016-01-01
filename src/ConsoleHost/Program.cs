@@ -18,6 +18,7 @@ namespace ConsoleHost
                 engine.AddTypeToGlobal<Point3D>();
                 engine.AddTypeToGlobal<Point>();
                 engine.AddTypeToGlobal<Toaster>();
+                engine.AddTypeToGlobal<ToasterOven>();
                 var pt = new Point3D { X = 18, Y = 27, Z = -1 };
                 //engine.SetGlobalVariable("pt", engine.Converter.FromObject(pt));
                 engine.RuntimeExceptionRaised += (sender, e) =>
@@ -34,11 +35,16 @@ namespace ConsoleHost
                 };
 
                 var fn = engine.EvaluateScriptText(@"(function() {
-    var t = new Toaster();
+    var t = new ToasterOven();
     t.StartToasting();
     t.addEventListener('toastcompleted', function(e) {
         echo('Toast is done!');
         echo('{0}', JSON.stringify(e));
+    });
+    t.addEventListener('loaftoasted', function(e) {
+        echo('Loaf is done!');
+        echo('{0}', JSON.stringify(e.e));
+        echo('Cooked {0} pieces', e.e.PiecesCookied);
     });
     var o = new Point3D(1, 2, 3);
     echo(o.toString());

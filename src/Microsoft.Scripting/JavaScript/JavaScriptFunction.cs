@@ -80,11 +80,15 @@ namespace Microsoft.Scripting.JavaScript
             var eng = GetEngine();
             if (thisObject == null)
                 thisObject = eng.NullValue;
+
             if (args == null)
                 args = Enumerable.Empty<JavaScriptValue>();
 
-            var applyFn = GetBuiltinFunctionProperty("call", "Function.prototype.call");
-            return applyFn.Invoke(args.PrependWith(thisObject));
+            var argsArray = args.PrependWith(this).Select(v => v.handle_.DangerousGetHandle()).ToArray();
+            JavaScriptValueSafeHandle result;
+            Errors.CheckForScriptExceptionOrThrow(api_.JsCallFunction(handle_, argsArray, unchecked((ushort)argsArray.Length), out result), eng);
+            return eng.CreateValueFromHandle(result);
+            //return applyFn.Invoke(args.PrependWith(this, thisObject));
         }
 
         #region DynamicObject overrides

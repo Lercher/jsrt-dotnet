@@ -402,8 +402,8 @@ namespace Microsoft.Scripting.JavaScript
                 RefCount = 0,
                 Constructor = ctor,
                 Prototype = prototypeObj,
-                HasInstanceEvents = baseTypeProjection?.HasInstanceEvents ?? publicInstanceEvents.Any(),
-                HasStaticEvents = baseTypeProjection?.HasStaticEvents ?? publicStaticEvents.Any(),
+                HasInstanceEvents = (baseTypeProjection?.HasInstanceEvents ?? false) || publicInstanceEvents.Any(),
+                HasStaticEvents = (baseTypeProjection?.HasStaticEvents ?? false) || publicStaticEvents.Any(),
             };
         }
 
@@ -646,7 +646,7 @@ namespace Microsoft.Scripting.JavaScript
                     var baseFn = baseObj.GetPropertyByName("addEventListener") as JavaScriptFunction;
                     if (baseFn != null)
                     {
-                        baseFn.Call(instance ? target : baseObj, args);
+                        baseFn.Call(instance ? baseTypeProjection.Prototype : baseTypeProjection.Constructor, args);
                     }
                 }
 

@@ -13,6 +13,7 @@ namespace Microsoft.Scripting
         public const string NoMutateJsRuntimeSettings = "Can't change JavaScriptRuntimeSettings once it has been used to create a runtime.";
         public const string DefaultFnOverwritten = "The built-in function '{0}' has been overwritten and is no longer a function.";
 
+        [DebuggerStepThrough]
         public static void ThrowFor(JsErrorCode errorCode)
         {
             Debug.Assert(errorCode != JsErrorCode.JsNoError);
@@ -20,6 +21,7 @@ namespace Microsoft.Scripting
             throw new Exception(errorCode.ToString());
         }
 
+        [DebuggerStepThrough]
         public static void ThrowIfIs(JsErrorCode errorCode)
         {
             Debug.Assert(errorCode != JsErrorCode.JsErrorScriptException);
@@ -28,6 +30,7 @@ namespace Microsoft.Scripting
                 throw new Exception(errorCode.ToString());
         }
 
+        [DebuggerStepThrough]
         public static void CheckForScriptExceptionOrThrow(JsErrorCode errorCode, JavaScriptEngine engine)
         {
             if (errorCode == JsErrorCode.JsErrorScriptException)
@@ -40,6 +43,7 @@ namespace Microsoft.Scripting
                 throw new Exception(errorCode.ToString());
         }
 
+        [DebuggerStepThrough]
         public static void ThrowIOEFmt(string formatStr, string param)
         {
             string result = string.Format(formatStr, param);
