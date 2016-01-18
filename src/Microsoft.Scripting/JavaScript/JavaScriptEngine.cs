@@ -507,10 +507,10 @@ namespace Microsoft.Scripting.JavaScript
         }
 
         private static IntPtr NativeCallbackThunk(
-            IntPtr callee, 
-            [MarshalAs(UnmanagedType.U1)] bool asConstructor, 
-            [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 3)] IntPtr[] args, 
-            ushort argCount, 
+            IntPtr callee,
+            [MarshalAs(UnmanagedType.U1)] bool asConstructor,
+            [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 3)] IntPtr[] args,
+            ushort argCount,
             IntPtr data)
         {
             // callee and args[0] are the same
@@ -526,7 +526,9 @@ namespace Microsoft.Scripting.JavaScript
             JavaScriptValue thisValue = null;
             if (argCount > 0)
             {
-                thisValue = engine.CreateValueFromHandle(new JavaScriptValueSafeHandle(args[0]));
+                //var c = callee; 
+                var c = args[0];
+                thisValue = engine.CreateValueFromHandle(new JavaScriptValueSafeHandle(c));
             }
 
             try
@@ -536,10 +538,11 @@ namespace Microsoft.Scripting.JavaScript
             }
             catch (Exception ex)
             {
+                // we need to get and store "undefined" before we set the exception, b/c afterwards the engine won't issue the value b/c of the exception
+                IntPtr undefined = engine.UndefinedValue.handle_.DangerousGetHandle(); 
                 var error = engine.CreateError(ex.Message);
                 engine.SetException(error);
-
-                return engine.UndefinedValue.handle_.DangerousGetHandle();
+                return undefined;
             }
         }
 

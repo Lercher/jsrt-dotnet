@@ -265,6 +265,7 @@
 
         public readonly FnJsCreateURIError JsCreateURIError;
 
+        [Obsolete("JsStartDebugging is not (yet) exported", error: false)]
         public readonly FnJsStartDebugging JsStartDebugging;
 
         public readonly FnJsParseScript JsParseScript;
@@ -478,18 +479,22 @@
             }
         }
 
-        private static void ThrowForNative()
+        private static void ThrowForNative(string what1, string what2)
         {
-            throw new Exception(string.Format("Win32 error received for LoadLibrary or GetProcAddress: 0x{0:x8}", Marshal.GetLastWin32Error()));
+            // 7F - ERROR_PROC_NOT_FOUND
+            throw new Exception(string.Format("Win32 error received for {1}({2}): 0x{0:x8}", Marshal.GetLastWin32Error(), what1, what2));
         }
 
         private static void SetFn<TDelegate>(ref TDelegate target, System.IntPtr hModule, string procName)
             where TDelegate : class
         {
             System.IntPtr procAddr = NativeMethods.GetProcAddress(hModule, procName);
-            if ((hModule == System.IntPtr.Zero))
+            if ((procAddr == System.IntPtr.Zero))
             {
-                ThrowForNative();
+                if (Marshal.GetLastWin32Error() != 0x7f) // 7F - ERROR_PROC_NOT_FOUND                   
+                    ThrowForNative("GetProcAddress", procName);
+                target = null;
+                return;
             }
             target = System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<TDelegate>(procAddr);
         }
@@ -525,6 +530,11 @@
             {
                 return FromFile(localPath);
             }
+            string chakraPath = Path.Combine(directory, "..", "..", "..", ".." , "..", "ChakraCore", "Build", "VcBuild", "bin", "x64_release", "ChakraCore.dll");
+            if (File.Exists(chakraPath))
+            {
+                return FromFile(chakraPath);
+            }           
 
             IntPtr hMod = NativeMethods.LoadLibrary("chakra.dll");
             if (hMod != IntPtr.Zero)
@@ -532,9 +542,11 @@
                 return new ChakraApi(hMod);
             }
 
-            throw new System.IO.FileNotFoundException(string.Format("Could not locate a copy of ChakraCore.dll to load.  The following paths were trie" +
-                        "d:\n\t{0}\n\t{1}\n\t{2}\n\nEnsure that an architecture-appropriate copy of ChakraCore.dl" +
-                        "l is included in your project.  Also tried to load the system-provided Chakra.dll.", mainPath, alternatePath, localPath));
+            throw new System.IO.FileNotFoundException(string.Format(
+                "Could not locate a copy of ChakraCore.dll to load. The following paths were tried:\n" +
+                "\t{0}\n\t{1}\n\t{2}\n\t{3}\n\nEnsure that an architecture-appropriate copy of ChakraCore.dll " +
+                "is included in your project. Also tried to load the system-provided Chakra.dll.", 
+                mainPath, alternatePath, localPath, chakraPath));
         }
 
         public static ChakraApi FromFile(string filePath)
@@ -546,12 +558,13 @@
             System.IntPtr hMod = NativeMethods.LoadLibraryEx(filePath, System.IntPtr.Zero, 0);
             if ((hMod == System.IntPtr.Zero))
             {
-                ThrowForNative();
+                string dllName = Path.GetFileName(filePath);
+                ThrowForNative("LoadLibrary", dllName);
             }
             return new ChakraApi(hMod);
         }
 
-        
+
     }
 }
 
