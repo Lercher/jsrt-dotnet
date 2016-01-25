@@ -634,38 +634,49 @@ namespace Microsoft.Scripting.JavaScript
         {
             var eventsArray = events.ToArray();
             var eventsLookup = eventsArray.ToDictionary(ei => ei.Name.ToLower());
-            // General approach here
-            // if there is a base thing, invoke that
+
             // for each event, register a delegate that marshals it back to JavaScript
             var add = engine.CreateFunction((eng, ctor, thisObj, args) =>
             {
-                bool callBase = ((instance ? baseTypeProjection?.HasInstanceEvents : baseTypeProjection?.HasStaticEvents) ?? false);
-                if (callBase)
-                {
-                    var baseObj = instance ? baseTypeProjection.Prototype : baseTypeProjection.Constructor;
-                    var baseFn = baseObj.GetPropertyByName("addEventListener") as JavaScriptFunction;
-                    if (baseFn != null)
-                    {
-                        baseFn.Call(instance ? baseTypeProjection.Prototype : baseTypeProjection.Constructor, args);
-                    }
-                }
-
+                // no this for addEventListener
                 var @this = thisObj as JavaScriptObject;
                 if (@this == null)
                     return eng.UndefinedValue;
 
+                // not a function call with at least two arguments
                 var argsArray = args.ToArray();
                 if (argsArray.Length < 2)
                     return eng.UndefinedValue;
 
+                // first arg is the lowered event name
                 string eventName = argsArray[0].ToString();
                 JavaScriptFunction callbackFunction = argsArray[1] as JavaScriptFunction;
                 if (callbackFunction == null)
                     return eng.UndefinedValue;
 
+                // try to find the named event in my type's direct events list, i.e. in eventsLookup
                 EventInfo curEvent;
                 if (!eventsLookup.TryGetValue(eventName, out curEvent))
-                    return eng.UndefinedValue;
+                {
+                    // If we can't find the eventName, we climb up the inheritance tree to find the event there:
+                    var baseObj = instance ? baseTypeProjection.Prototype : baseTypeProjection.Constructor;
+                    var baseFn = baseObj.GetPropertyByName("addEventListener") as JavaScriptFunction;
+                    if (baseFn == null)
+                    {
+                        // if we don't have a base class / prototype or whatever,
+                        // then threre is no one that rises the event eventName, so:
+                        throw new Exception($"addEventListener: there is no slot for '{eventName}' in the inheritance tree of '{owningTypeName}' to bind an event listener to");
+                    }
+                    else
+                    {
+                        // let the baseclass handle that addEventListener call
+                        // baseFn.Call(instance ? baseTypeProjection.Prototype : baseTypeProjection.Constructor, args);
+                        JavaScriptObject thisObj1 = (JavaScriptObject)thisObj;
+                        baseFn.Call(thisObj1, args);
+                        // and we are done
+                        return eng.UndefinedValue;
+                    }
+                }
 
                 MethodInfo targetMethod = curEvent.EventHandlerType.GetMethod("Invoke");
 
@@ -674,8 +685,8 @@ namespace Microsoft.Scripting.JavaScript
 
                 var marshaler = Expression.Lambda(curEvent.EventHandlerType, Expression.Block(
                     Expression.Call(
-                        typeof(EventMarshaler).GetMethod(nameof(EventMarshaler.InvokeJavaScriptCallback)), 
-                        Expression.Constant(cookie), 
+                        typeof(EventMarshaler).GetMethod(nameof(EventMarshaler.InvokeJavaScriptCallback)),
+                        Expression.Constant(cookie),
                         Expression.NewArrayInit(typeof(string), targetMethod.GetParameters().Select(p => Expression.Constant(p.Name))),
                         Expression.NewArrayInit(typeof(object), paramsExpr))
                 ), paramsExpr);

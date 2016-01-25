@@ -10,6 +10,8 @@ namespace ConsoleHost
     {
         static void Main(string[] args)
         {
+            Console.WriteLine("Color codes: Black - C# Console output, Blue - JS Echo callback, Red - JS Runtime Exception");
+            Console.WriteLine();
             var runtime = new JavaScriptRuntime();
             var engine = runtime.CreateEngine();
             using (var context = engine.AcquireContext())
@@ -20,7 +22,7 @@ namespace ConsoleHost
                 engine.AddTypeToGlobal<Toaster>();
                 engine.AddTypeToGlobal<ToasterOven>();
                 var pt = new Point3D { X = 18, Y = 27, Z = -1 };
-                //engine.SetGlobalVariable("pt", engine.Converter.FromObject(pt));
+                engine.SetGlobalVariable("pt", engine.Converter.FromObject(pt));
                 engine.RuntimeExceptionRaised += (sender, e) =>
                 {
                     dynamic error = engine.GetAndClearException();
@@ -34,31 +36,52 @@ namespace ConsoleHost
                     Console.ForegroundColor = color;
                 };
 
-                var fn = engine.EvaluateScriptText(@"(function() {
+                var fn = engine.EvaluateScriptText(@"
+echo('Hello Toaster outer');
+(function() {
+    echo('----- Point3D');
+    var o = new Point3D(1, 2, 3);
+    echo('o.toString={0}', o.ToString());
+    o.X = 254;
+    echo('o.X={0}', o.X);
+    o.Y = 189;
+    o.Z = -254.341;
+    echo('o after mutation? {0}', o.ToString());
+    echo('Hello, world? -> {0}, {1}!', 'Hello', 'world');
+    echo('pt.X={0}', pt.X);
+    echo('pt.Y={0}', pt.Y);
+    echo('pt.toString={0}', pt.ToString());
+    pt.Y = 207;
+    echo('pt.toString={0}', pt.ToString());
+
+/*
+    echo('----- Toaster');
+    var tb = new Toaster();
+    tb.addEventListener('toastcompleted', function(e) {
+        echo('Direct Toaster Toast is done!');
+        echo('{0}', JSON.stringify(e));
+    });
+    tb.StartToasting(); 
+*/
+
+    echo('----- ToasterOven');
     var t = new ToasterOven();
-    t.StartToasting();
-    t.addEventListener('toastcompleted', function(e) {
-        echo('Toast is done!');
+    t.addEventListener('toastcompleted2', function(e) {
+        echo('Derived ToasterOven Toast is done!');
         echo('{0}', JSON.stringify(e));
     });
     t.addEventListener('loaftoasted', function(e) {
         echo('Loaf is done!');
         echo('{0}', JSON.stringify(e.e));
-        echo('Cooked {0} pieces', e.e.PiecesCookied);
+        echo('Cooked {0} pieces', e.e.PiecesCooked);
     });
-    var o = new Point3D(1, 2, 3);
-    echo(o.toString());
-    o.X = 254;
-    echo('{0}', o.X);
-    o.Y = 189;
-    o.Z = -254.341;
-    echo('o after mutation? {0}', o.ToString());
-    echo('{0}, {1}!', 'Hello', 'world');
-    //echo('{0}', pt.X);
-    //echo('{0}', pt.Y);
-    //echo('{0}', pt.ToString());
-    //pt.Y = 207;
-    //echo('{0}', pt.ToString());
+    t.addEventListener('toastcompleted', function(e) {
+        echo('Base Toaster Toast is done!');
+        echo('{0}', JSON.stringify(e));
+    });
+    t.StartToasting();
+
+    echo('----- script done');
 })();");
                 fn.Invoke(Enumerable.Empty<JavaScriptValue>());
                 var obj = engine.CreateObject();
@@ -84,7 +107,10 @@ namespace ConsoleHost
         {
             string fmt = arguments.First().ToString();
             object[] args = (object[])arguments.Skip(1).ToArray();
+            var c = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Blue;
             Console.WriteLine(fmt, args);
+            Console.ForegroundColor = c;
             return engine.UndefinedValue;
         }
     }

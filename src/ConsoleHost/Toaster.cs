@@ -9,6 +9,11 @@ namespace ConsoleHost
 {
     public class Toaster
     {
+        public Toaster()
+        {
+            Console.WriteLine($"New {nameof(Toaster)} here");
+        }
+
         public virtual void StartToasting()
         {
             Timer t = null;
@@ -34,6 +39,11 @@ namespace ConsoleHost
     {
         private int count_;
         private Timer t_;
+
+        public ToasterOven()
+        {
+            Console.WriteLine($"New {nameof(ToasterOven)} here");
+        }
         public override void StartToasting()
         {
             if (t_ != null)
@@ -49,11 +59,11 @@ namespace ConsoleHost
                 return;
 
             servicing_ = true;
-            OnToastCompleted();
+            OnToastCompleted2();
             count_++;
             if (count_ % 10 == 0)
             {
-                OnLoafToasted(new Loaf { PiecesCookied = 10 });
+                OnLoafToasted(new Loaf { PiecesCooked = 10 });
             }
             servicing_ = false;
         }
@@ -62,6 +72,17 @@ namespace ConsoleHost
         {
             t_.Dispose();
             t_ = null;
+        }
+
+        public event EventHandler ToastCompleted2;
+        protected virtual void OnToastCompleted2()
+        {
+            var tc = ToastCompleted2;
+            if (tc != null)
+            {
+                tc(this, EventArgs.Empty);
+            }
+            OnToastCompleted(); // call the base class event
         }
 
         public event EventHandler<Loaf> LoafToasted;
@@ -75,6 +96,11 @@ namespace ConsoleHost
 
     public class Loaf
     {
-        public int PiecesCookied { get; set; }
+        public Loaf()
+        {
+            Console.WriteLine($"New {nameof(Loaf)} here");
+        }
+
+        public int PiecesCooked { get; set; }
     }
 }
